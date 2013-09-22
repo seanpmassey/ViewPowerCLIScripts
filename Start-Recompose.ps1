@@ -95,7 +95,7 @@ $Pools = Get-Pools | Where {$_.ParentVMPath -like "*$ParentVM*"}
 }
 Else
 {
-$pools = $poolname
+$pools = Get-Pools | Where {$_.name -like "*$poolname*"}
 }
 
 #Set Recompose Time - adds five minutes to allow recompose to be set on all pools, which can take a few minutes
