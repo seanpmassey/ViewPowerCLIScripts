@@ -9,20 +9,28 @@
    DNS name of a connection broker in your environment.
 .PARAMETER ParentVM
    The name of the ParentVM.  This should be the name of the VM as it appears in the vCenter inventory.
+.PARAMETER PoolName
+   The name of a particular pool.  You can use this parameter to recompose a single pool if you have multiple pools that use the same ParentVM.
+.PARAMETER ReplicaDatastore
+   The datastore that Replicas are stored on.  Used for checking to see if enough space is available to initiate cloning operations.
 .EXAMPLE
    Start-Recompose.ps1 -vCenter vcenter.domain.com -View view.domain.com -ParentVM Win7-Base
+.EXAMPLE
+   Start-Recompose.ps1 -vCenter vcenter.domain.com -View view.domain.com -ParentVM Win7-Base -Poolname Base-Pool
+.EXAMPLE
+   Start-Recompose.ps1 -vCenter vcenter.domain.com -View view.domain.com -ParentVM Win7-Base -ReplicaDatastore DATASTORE1
 #>
 
 ### Must be run from the View Connection Server ###
 
 ### Based on http://gregcarriger.wordpress.com/2011/06/08/powershell-powercli-snapshot-and-recompose-script/
 
-Param([string]$VCenter = "applvc01.gbcdnt.com",[string]$View = "applvc01.gbcdnt.com",[string]$ParentVM,[string]$Poolname,[String]$ReplicaDatastore = "COMP-Datastore-Replica")
+Param([string]$VCenter = "vCenter",[string]$View = "Broker",[string]$ParentVM,[string]$Poolname,[String]$ReplicaDatastore = "Replica-Datastore")
 
 Function Send-Email
 {
  Param([string]$SMTPBody,[string]$SMTPSubject = "Recompose Operation Cancelled",[string]$SMTPTo)
-Send-MailMessage -To $SMTPTo -Body $SMTPBody -Subject $SMTPSubject -SmtpServer smtp.gbdioc.org -From "Notifications_noreply@gbdioc.org" -BodyAsHtml -Priority High
+Send-MailMessage -To $SMTPTo -Body $SMTPBody -Subject $SMTPSubject -SmtpServer smtp.server.local -From "Notifications_noreply@email.local" -BodyAsHtml -Priority High
 }
 
 Function Build-SnapshotPath
@@ -48,7 +56,7 @@ param($ConnectionServer,[switch]$Remediate,$EmailRcpt,$ParentVM="")
 $PoolList = @()
 
 $arrIncludedProperties = "cn,name,pae-DisplayName,pae-MemberDN,pae-SVIVmParentVM,pae-SVIVmSnapshot,pae-SVIVmSnapshotMOID,pae-SVIVmDatastore".Split(",")
-$pools = Get-QADObject -Service applvcs03.gbcdnt.com -DontUseDefaultIncludedProperties -IncludedProperties $arrIncludedProperties -LdapFilter "(&(objectClass=pae-ServerPool)(pae-SVIVmParentVM=*$ParentVM))" | Sort-Object "pae-DisplayName" | Select-Object Name, "pae-DisplayName", "pae-SVIVmParentVM" , "pae-SVIVmSnapshot", "pae-SVIVmSnapshotMOID", "pae-MemberDN", @{Name="pae-SVIVmDatastore";expression={$_."pae-SVIVmDatastore" -match "replica"}}
+$pools = Get-QADObject -Service $view -DontUseDefaultIncludedProperties -IncludedProperties $arrIncludedProperties -LdapFilter "(&(objectClass=pae-ServerPool)(pae-SVIVmParentVM=*$ParentVM))" | Sort-Object "pae-DisplayName" | Select-Object Name, "pae-DisplayName", "pae-SVIVmParentVM" , "pae-SVIVmSnapshot", "pae-SVIVmSnapshotMOID", "pae-MemberDN", @{Name="pae-SVIVmDatastore";expression={$_."pae-SVIVmDatastore" -match "replica"}}
 
 ForEach($pool in $pools)
 {
@@ -132,7 +140,7 @@ ForEach($Pool in $Pools)
 	}
 	Else
 	{
-		$SMTPTo = "smassey@gbdioc.org"
+		$SMTPTo = "name@email.local"
 		$SMTPSubject = "Recompose operations for pool $Poolname have been cancelled:  Insufficient Space."
 		$SMTPBody = "The Recompose operation for desktop pool $Poolname has been cancelled.  There is not enough space available on $ReplicaDatastore to successfully complete cloning operations.  Please verify that there are no other cloning operations being conducted and that all recompose operations have completed successfully before rescheduling this job."
 		Send-Email -SMTPBody $SMTPBody -SMTPTo $SMTPTo -SMTPSubject $SMTPSubject
