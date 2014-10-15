@@ -90,16 +90,17 @@ Connect-VIServer –Server $VCenter –Protocol https
 #Enable Line for Debugging Only
 #Write-Host $strSnapshotPath -ForegroundColor Yellow
 $snapshotpath = Build-SnapshotPath -ParentVM $ParentVM
-Write-EventLog –LogName Application –Source “VMware View” –EntryType Information –EventID 9000 –Message “Pools based on $ParentVM will use $SnapshotPath when the recompose is complete."
+Write-EventLog –LogName Application –Source “VMware View” –EntryType Information –EventID 9000 –Message "Pools based on $ParentVM will use $SnapshotPath when the recompose is complete."
 
 #Discover Pools Used by Base Image if Pool Name not provided
+
 If($poolname -eq $null)
 {
-	$Pools = Get-Pools | Where {$_.ParentVMPath -like "*$ParentVM*"}
+	$Pools = Get-Pools -ConnectionServer $View | Where {$_.ParentVMPath -like "*$ParentVM*"}
 }
 Else
 {
-	$pools = Get-Pools | Where {$_.name -like "*$poolname*"}
+	$pools = Get-Pools -ConnectionServer $View | Where {$_.name -like "*$poolname*"}
 }
 
 #Set Recompose Time - adds five minutes to allow recompose to be set on all pools, which can take a few minutes
@@ -128,14 +129,14 @@ ForEach($Pool in $Pools)
 		## Recompose
 		##Stop on Error set to false.  This will allow the pool to continue recompose operations after hours if a single vm encounters an error rather than leaving the recompose tasks in a halted state.
 		Get-DesktopVM -pool_id $Poolname | Send-LinkedCloneRecompose -schedule $Time -parentVMPath $ParentVMPath -parentSnapshotPath $SnapshotPath -forceLogoff:$true -stopOnError:$false
-		Write-EventLog –LogName Application –Source “VMware View” –EntryType Information –EventID 9000 –Message “Pool $Poolname will start to recompose at $Time using $snapshotpath."
+		Write-EventLog –LogName Application –Source “VMware View” –EntryType Information –EventID 9000 –Message "Pool $Poolname will start to recompose at $Time using $snapshotpath."
 	}
 	Else
 	{
-		$SMTPTo = "smassey@gbdioc.org"
-		$SMTPSubject = "Recompose operations for pool $Poolname have been cancelled:  Insufficient Space."
-		$SMTPBody = "The Recompose operation for desktop pool $Poolname has been cancelled.  There is not enough space available on $ReplicaDatastore to successfully complete cloning operations.  Please verify that there are no other cloning operations being conducted and that all recompose operations have completed successfully before rescheduling this job."
-		Send-Email -SMTPBody $SMTPBody -SMTPTo $SMTPTo -SMTPSubject $SMTPSubject
+		#$SMTPTo = "smassey@gbdioc.org"
+		#$SMTPSubject = "Recompose operations for pool $Poolname have been cancelled:  Insufficient Space."
+		#$SMTPBody = "The Recompose operation for desktop pool $Poolname has been cancelled.  There is not enough space available on $ReplicaDatastore to successfully complete cloning operations.  Please verify that there are no other cloning operations being conducted and that all recompose operations have completed successfully before rescheduling this job."
+		#Send-Email -SMTPBody $SMTPBody -SMTPTo $SMTPTo -SMTPSubject $SMTPSubject
 		Write-EventLog –LogName Application –Source “VMware View” –EntryType Error –EventID 9000 –Message "There is not enough space availabe on $ReplicaDatastore to recompose pool $Poolname.  This recompose job has been cancelled."
 	}
 
